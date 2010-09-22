@@ -1,0 +1,4 @@
+dev/ - Contains device driver specific routines for the network controller and
+any buses etc.
+net/ - Contains networking code that implements the actual networking stack.
+/ - Contains the application code.
