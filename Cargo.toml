@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "firmware",
+    "backend",
 ]
 
 [profile.release]
