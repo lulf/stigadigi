@@ -10,7 +10,7 @@ cortex-m = "0.6.4"
 cortex-m-rt = { version = "0.6.11", features = ["device"] }
 rtt-target = {version = "0.2.0", features = ["cortex-m"] }
 panic-halt = "0.2.0"
-nrf52833-hal = { version = "0.12.0", features = ["rt"] }
+nrf51-hal = { version = "0.12.0", features = ["rt"] }
 log = "0.4.11"
 rtt-logger = "0.1.0"
 embedded-hal = { version = "0.2.3", features = ["unproven"] }
