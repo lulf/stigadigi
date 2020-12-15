@@ -8,9 +8,11 @@ extern crate cortex_m;
 use cortex_m_rt::entry;
 
 use embedded_hal::adc::OneShot;
+use embedded_hal::digital::v2::OutputPin;
 
 use hal::adc::{Adc, AdcConfig};
 use hal::clocks::Clocks;
+use hal::gpio::Level;
 use hal::rtc::{Rtc, RtcInterrupt};
 
 use log::LevelFilter;
@@ -32,6 +34,7 @@ fn main() -> ! {
     let gpio = hal::gpio::p0::Parts::new(p.GPIO);
 
     let mut input = gpio.p0_01.into_floating_input();
+    let mut output = gpio.p0_07.into_push_pull_output(Level::Low);
 
     let config = AdcConfig {
         input_selection: hal::pac::adc::config::INPSEL_A::ANALOGINPUTNOPRESCALING,
@@ -49,11 +52,30 @@ fn main() -> ! {
 
     log::info!("Started application");
 
+    let mut count = 0;
+    let mut on = false;
     loop {
         while !rtc.is_event_triggered(RtcInterrupt::Tick) {}
         rtc.reset_event(RtcInterrupt::Tick);
         rtc.clear_counter();
-        let value = adc.read(&mut input).unwrap();
-        log::info!("Read value {}", value);
+        count += 1;
+        if count % 10 == 0 {
+            let value = adc.read(&mut input).unwrap();
+            log::info!("Read sensor value {}", value);
+        }
+
+        if count % 50 < 25 {
+            if !on {
+                on = true;
+                log::info!("Laser on!");
+            }
+            let _ = output.set_high().unwrap();
+        } else {
+            if on {
+                on = false;
+                log::info!("Laser off!");
+            }
+            let _ = output.set_low().unwrap();
+        }
     }
 }
