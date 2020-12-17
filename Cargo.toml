@@ -1,5 +1,4 @@
 [workspace]
-edition = "2018"
 members = [
     "firmware",
     "backend",
