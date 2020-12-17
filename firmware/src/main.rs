@@ -36,6 +36,9 @@ fn main() -> ! {
     let mut input = gpio.p0_01.into_floating_input();
     let mut output = gpio.p0_07.into_push_pull_output(Level::Low);
 
+    // Enable lazer
+    let _ = output.set_high().unwrap();
+
     let config = AdcConfig {
         input_selection: hal::pac::adc::config::INPSEL_A::ANALOGINPUTNOPRESCALING,
         resolution: hal::pac::adc::config::RES_A::_10BIT,
@@ -53,29 +56,35 @@ fn main() -> ! {
     log::info!("Started application");
 
     let mut count = 0;
-    let mut on = false;
+    let mut goal = false;
     loop {
         while !rtc.is_event_triggered(RtcInterrupt::Tick) {}
         rtc.reset_event(RtcInterrupt::Tick);
         rtc.clear_counter();
         count += 1;
-        if count % 10 == 0 {
-            let value = adc.read(&mut input).unwrap();
-            log::info!("Read sensor value {}", value);
+
+        let value = adc.read(&mut input).unwrap();
+        if value > 900 {
+            if !goal {
+                log::info!("GOAL!!!!");
+                goal = true;
+            }
+        } else {
+            goal = false;
         }
 
-        if count % 50 < 25 {
+        /*
+        if count % 2 < 25 {
             if !on {
                 on = true;
                 log::info!("Laser on!");
             }
-            let _ = output.set_high().unwrap();
         } else {
             if on {
                 on = false;
                 log::info!("Laser off!");
             }
             let _ = output.set_low().unwrap();
-        }
+        }*/
     }
 }
