@@ -170,6 +170,7 @@ async fn main() -> std::io::Result<()> {
             .service(api::new_player)
             .service(api::list_games)
             .service(api::list_players)
+            .service(api::update_game)
     })
     .bind(("127.0.0.1", port))?
     .workers(1)
