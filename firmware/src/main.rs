@@ -6,7 +6,7 @@ use panic_halt as _;
 
 extern crate cortex_m;
 
-use embedded_hal::digital::v2::InputPin;
+// use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 
 use core::mem;
@@ -23,6 +23,7 @@ static LOGGER: RTTLogger = RTTLogger::new(LevelFilter::Trace);
 const COOLDOWN: u32 = 10_000_000u32;
 
 pub struct Goal {
+    #[allow(dead_code)]
     input: Pin<Input<PullUp>>,
     led: Pin<Output<PushPull>>,
     active: u32,
@@ -40,7 +41,7 @@ const APP: () = {
     }
 
     #[init]
-    fn init(mut ctx: init::Context) -> init::LateResources {
+    fn init(ctx: init::Context) -> init::LateResources {
         rtt_init_print!();
 
         unsafe {
@@ -50,12 +51,12 @@ const APP: () = {
 
         let gpio = hal::gpio::p0::Parts::new(ctx.device.GPIO);
 
-        let mut input_left = gpio.p0_01.into_pullup_input().degrade();
-        let mut input_right = gpio.p0_07.into_pullup_input().degrade();
+        let input_left = gpio.p0_01.into_pullup_input().degrade();
+        let input_right = gpio.p0_07.into_pullup_input().degrade();
 
         //    let _clocks = Clocks::new(p.CLOCK).enable_ext_hfosc();
 
-        let mut gpiote = Gpiote::new(ctx.device.GPIOTE);
+        let gpiote = Gpiote::new(ctx.device.GPIOTE);
         gpiote
             .channel0()
             .input_pin(&input_left)

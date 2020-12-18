@@ -1,22 +1,19 @@
 table! {
     games (id) {
-        id -> Nullable<Integer>,
-        score_left -> Integer,
-        score_right -> Integer,
-        status -> Text,
-        player_left -> Nullable<Integer>,
-        player_right -> Nullable<Integer>,
+        id -> Int4,
+        score_left -> Int4,
+        score_right -> Int4,
+        status -> Varchar,
+        player_left -> Nullable<Int4>,
+        player_right -> Nullable<Int4>,
     }
 }
 
 table! {
     players (id) {
-        id -> Nullable<Integer>,
-        rating -> Integer,
+        id -> Int4,
+        rating -> Int4,
     }
 }
 
-allow_tables_to_appear_in_same_query!(
-    games,
-    players,
-);
+allow_tables_to_appear_in_same_query!(games, players,);

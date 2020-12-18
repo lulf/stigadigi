@@ -5,7 +5,7 @@ authors = ["Ulf Lilleengen <ulf.lilleengen@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-diesel = { version = "1.4.4", features = ["postgres"] }
+diesel = { version = "1.4.4", features = ["postgres", "numeric"] }
 dotenv = "0.15.0"
 cloudevents-sdk = "0.3.0"
 cloudevents-sdk-actix-web = "0.3.0"

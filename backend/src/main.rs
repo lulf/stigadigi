@@ -6,31 +6,14 @@ use actix_web::http::StatusCode;
 use actix_web::{post, web, App, HttpRequest, HttpResponse, HttpServer};
 use cloudevents_sdk_actix_web::HttpRequestExt;
 use std::collections::HashMap;
+use diesel::prelude::*;
+use dotenv::dotenv;
+use std::env;
 
-#[post("/")]
-async fn reply_event(
-    req: HttpRequest,
-    payload: web::Payload,
-) -> Result<HttpResponse, actix_web::Error> {
-    let request_event = req.to_event(payload).await?;
-    info!("{:?}", request_event);
+use stigadigi_backend::models::*;
+use stigadigi_backend::establish_connection;
 
-    HttpResponseBuilder::new(StatusCode::OK).await
-}
 
-type Score = u32;
-type Rating = u32;
-type GameId = u32;
-
-struct Player {
-    rating: Rating,
-}
-
-struct GameState {
-    status: Status,
-    left: Score,
-    right: Score,
-}
 
 /// Notify API that new game should be created and assigned an id.
 /// POST /games
@@ -71,40 +54,40 @@ struct GameState {
 ///   
 ///   "
 
-pub enum Status {
-    Started,
-    Finished,
-}
-
-struct Game {
-    id: GameId,
-    state: GameState,
-    left: Option<Player>,
-    right: Option<Player>,
-}
 
 struct GameController {
-    database: HashMap<GameId, Game>,
+    connection: PgConnection,
 }
 
 impl GameController {
     fn new() -> GameController {
+        let connection = establish_connection();
         GameController {
-            database: HashMap::new(),
+            connection
         }
     }
 
-    fn new_game(&mut self) -> &mut Game {
+    fn new_game(&mut self) -> GameId {
+        let id: GameId = 0;
+        id
     }
 
     fn get_game(&mut self, id: GameId) -> Option<&mut Game> {
-        self.database.get_mut(&id)
+        None
     }
-
-    fn update(id: GameId, state: GameState) {
-    }
-
 }
+
+#[post("/")]
+async fn reply_event(
+    req: HttpRequest,
+    payload: web::Payload,
+) -> Result<HttpResponse, actix_web::Error> {
+    let request_event = req.to_event(payload).await?;
+    info!("{:?}", request_event);
+
+    HttpResponseBuilder::new(StatusCode::OK).await
+}
+
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
