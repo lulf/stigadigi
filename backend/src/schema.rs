@@ -12,6 +12,7 @@ table! {
 table! {
     players (id) {
         id -> Int4,
+        name -> Varchar,
         rating -> Int4,
     }
 }

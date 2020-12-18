@@ -1,19 +1,8 @@
-#[macro_use]
 extern crate log;
 
-use actix_web::dev::HttpResponseBuilder;
-use actix_web::http::StatusCode;
-use actix_web::{post, web, App, HttpRequest, HttpResponse, HttpServer};
-use cloudevents_sdk_actix_web::HttpRequestExt;
-use std::collections::HashMap;
-use diesel::prelude::*;
-use dotenv::dotenv;
-use std::env;
+use actix_web::{web, App, HttpServer};
 
-use stigadigi_backend::models::*;
-use stigadigi_backend::establish_connection;
-
-
+use stigadigi_backend::GameData;
 
 /// Notify API that new game should be created and assigned an id.
 /// POST /games
@@ -51,61 +40,136 @@ use stigadigi_backend::establish_connection;
 ///   RESPONSE: [{"12", "left": 332, "right": 333, state: {"left": 0, "right": 5, "status": "finished"}}]
 ///
 ///
+
 ///   
 ///   "
 
+mod api {
+    //  use actix_web::dev::HttpResponseBuilder;
+    //  use actix_web::http::StatusCode;
+    use actix_web::{get, post, put, web, HttpRequest, HttpResponse};
+    // use cloudevents_sdk_actix_web::HttpRequestExt;
+    use serde::{Deserialize, Serialize};
+    use stigadigi_backend::{Game, GameData, GameId, Player, PlayerId, Score};
 
-struct GameController {
-    connection: PgConnection,
-}
+    #[derive(Serialize, Deserialize)]
+    struct NewGameResponse {
+        id: GameId,
+    }
 
-impl GameController {
-    fn new() -> GameController {
-        let connection = establish_connection();
-        GameController {
-            connection
+    #[post("/api/v1/games")]
+    async fn new_game(
+        _: HttpRequest,
+        data: web::Data<GameData>,
+    ) -> Result<HttpResponse, actix_web::Error> {
+        let result = data.new_game().await;
+        match result {
+            Ok(id) => Ok(HttpResponse::Ok().json(NewGameResponse { id })),
+            Err(e) => Ok(HttpResponse::InternalServerError().json(e.to_string())),
         }
     }
 
-    fn new_game(&mut self) -> GameId {
-        let id: GameId = 0;
-        id
+    #[derive(Serialize, Deserialize)]
+    struct NewPlayerRequest {
+        name: String,
     }
 
-    fn get_game(&mut self, id: GameId) -> Option<&mut Game> {
-        None
+    #[derive(Serialize, Deserialize)]
+    struct NewPlayerResponse {
+        id: PlayerId,
+    }
+
+    #[post("/api/v1/players")]
+    async fn new_player(
+        player: web::Json<NewPlayerRequest>,
+        data: web::Data<GameData>,
+    ) -> Result<HttpResponse, actix_web::Error> {
+        let result = data.new_player(&player.name).await;
+        match result {
+            Ok(id) => Ok(HttpResponse::Ok().json(NewPlayerResponse { id })),
+            Err(e) => Ok(HttpResponse::InternalServerError().json(e.to_string())),
+        }
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct ListPlayersResponse {
+        players: Vec<Player>,
+    }
+
+    #[get("/api/v1/players")]
+    async fn list_players(data: web::Data<GameData>) -> Result<HttpResponse, actix_web::Error> {
+        let result = data.list_players().await;
+        match result {
+            Ok(ps) => Ok(HttpResponse::Ok().json(ListPlayersResponse { players: ps })),
+            Err(e) => Ok(HttpResponse::InternalServerError().json(e.to_string())),
+        }
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct ListGamesResponse {
+        games: Vec<Game>,
+    }
+
+    #[get("/api/v1/games")]
+    async fn list_games(data: web::Data<GameData>) -> Result<HttpResponse, actix_web::Error> {
+        let result = data.list_games().await;
+        match result {
+            Ok(gs) => Ok(HttpResponse::Ok().json(ListGamesResponse { games: gs })),
+            Err(e) => Ok(HttpResponse::InternalServerError().json(e.to_string())),
+        }
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct UpdateGameResponse {
+        id: GameId,
+    }
+
+    #[derive(Serialize, Deserialize)]
+    struct UpdateGameRequest {
+        score_left: Score,
+        score_right: Score,
+        status: String,
+    }
+
+    #[put("/api/v1/games/{game_id}")]
+    async fn update_game(
+        web::Path(game_id): web::Path<GameId>,
+        game: web::Json<UpdateGameRequest>,
+        data: web::Data<GameData>,
+    ) -> Result<HttpResponse, actix_web::Error> {
+        let result = data
+            .update_game_status(game_id, game.score_left, game.score_right, &game.status)
+            .await;
+        match result {
+            Ok(_) => Ok(HttpResponse::Ok().json(UpdateGameResponse { id: game_id })),
+            Err(e) => Ok(HttpResponse::InternalServerError().json(e.to_string())),
+        }
     }
 }
-
-#[post("/")]
-async fn reply_event(
-    req: HttpRequest,
-    payload: web::Payload,
-) -> Result<HttpResponse, actix_web::Error> {
-    let request_event = req.to_event(payload).await?;
-    info!("{:?}", request_event);
-
-    HttpResponseBuilder::new(StatusCode::OK).await
-}
-
 
 #[actix_rt::main]
 async fn main() -> std::io::Result<()> {
     // Setup logger
-    std::env::set_var("RUST_LOG", "info");
     env_logger::init();
+
+    let data = GameData::new().expect("error initializing game data");
 
     // Get port from envs
     let port: u16 = std::env::var("PORT")
         .ok()
         .map(|e| e.parse().ok())
         .flatten()
-        .unwrap_or(8080);
+        .unwrap_or(8888);
 
     // Create the HTTP server
-    HttpServer::new(|| {
-        let app_base = App::new().wrap(actix_web::middleware::Logger::default());
-        app_base.service(reply_event)
+    HttpServer::new(move || {
+        App::new()
+            .wrap(actix_web::middleware::Logger::default())
+            .app_data(web::Data::new(data.clone()))
+            .service(api::new_game)
+            .service(api::new_player)
+            .service(api::list_games)
+            .service(api::list_players)
     })
     .bind(("127.0.0.1", port))?
     .workers(1)
