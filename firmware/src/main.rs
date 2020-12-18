@@ -6,7 +6,7 @@ use panic_halt as _;
 
 extern crate cortex_m;
 
-// use embedded_hal::digital::v2::InputPin;
+use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 
 use core::mem;
@@ -23,10 +23,20 @@ static LOGGER: RTTLogger = RTTLogger::new(LevelFilter::Trace);
 const COOLDOWN: u32 = 10_000_000u32;
 
 pub struct Goal {
-    #[allow(dead_code)]
     input: Pin<Input<PullUp>>,
     led: Pin<Output<PushPull>>,
     active: u32,
+}
+
+impl Goal {
+    fn reset(&mut self) {
+        self.active = 0;
+        self.led.set_high().unwrap();
+    }
+
+    fn is_active(&mut self) -> bool {
+        self.input.is_high().unwrap()
+    }
 }
 
 #[app(device = crate::hal::pac, peripherals = true)]
@@ -38,6 +48,8 @@ const APP: () = {
         timer: TIMER0,
         #[init(0)]
         now: u32,
+        #[init(false)]
+        started: bool,
     }
 
     #[init]
@@ -51,6 +63,8 @@ const APP: () = {
 
         let gpio = hal::gpio::p0::Parts::new(ctx.device.GPIO);
 
+        let start_btn = gpio.p0_17.into_pullup_input().degrade();
+
         let input_left = gpio.p0_01.into_pullup_input().degrade();
         let input_right = gpio.p0_07.into_pullup_input().degrade();
 
@@ -62,10 +76,14 @@ const APP: () = {
             .input_pin(&input_left)
             .hi_to_lo()
             .enable_interrupt();
-
         gpiote
             .channel1()
             .input_pin(&input_right)
+            .hi_to_lo()
+            .enable_interrupt();
+        gpiote
+            .channel2()
+            .input_pin(&start_btn)
             .hi_to_lo()
             .enable_interrupt();
 
@@ -102,26 +120,27 @@ const APP: () = {
         }
     }
 
-    #[task(binds = TIMER0, resources = [timer, left, right, now])]
+    #[task(binds = TIMER0, resources = [timer, left, right, now, started])]
     fn on_timer(ctx: on_timer::Context) {
         let on_timer::Resources {
             timer,
             left,
             right,
             now,
+            started,
         } = ctx.resources;
 
         *now = timer.now();
 
         let nownow = *now;
 
-        if timer.is_pending() {
-            if left.active > 0 && nownow - left.active > COOLDOWN {
+        if timer.is_pending() && *started {
+            if left.active > 0 && nownow - left.active > COOLDOWN && !left.is_active() {
                 log::trace!("RESETTING LEFT COOLDOWN");
                 left.led.set_high().unwrap();
                 left.active = 0;
             }
-            if right.active > 0 && nownow - right.active > COOLDOWN {
+            if right.active > 0 && nownow - right.active > COOLDOWN && !right.is_active() {
                 log::trace!("RESETTING RIGHT COOLDOWN");
                 right.led.set_high().unwrap();
                 right.active = 0;
@@ -131,28 +150,41 @@ const APP: () = {
         timer.set_interrupt(nownow + 1000000);
     }
 
-    #[task(binds = GPIOTE, resources = [gpiote, left, right, timer])]
+    #[task(binds = GPIOTE, resources = [gpiote, left, right, timer, started])]
     fn on_detected(ctx: on_detected::Context) {
         let on_detected::Resources {
             gpiote,
             timer,
             left,
             right,
+            started,
         } = ctx.resources;
 
         if gpiote.channel0().is_event_triggered() {
-            log::trace!("INTERRUPT LEFT");
-            if left.active == 0 {
+            log::trace!("INTERRUPT LEFT: {}", left.is_active());
+            if *started && left.active == 0 && left.is_active() {
                 log::info!("GOAL PLAYER LEFT!!");
                 left.led.set_low().unwrap();
                 left.active = timer.now();
             }
         } else if gpiote.channel1().is_event_triggered() {
-            log::trace!("INTERRUPT RIGHT");
-            if right.active == 0 {
+            log::trace!("INTERRUPT RIGHT: {}", right.is_active());
+            if *started && right.active == 0 && right.is_active() {
                 log::info!("GOAL PLAYER RIGHT!!");
                 right.led.set_low().unwrap();
                 right.active = timer.now();
+            }
+        } else if gpiote.channel2().is_event_triggered() {
+            if !*started {
+                log::info!("Starting game!");
+                // TODO: Call game API
+                *started = true;
+            } else {
+                log::info!("Stopping game!");
+                // TODO: Call game API
+                *started = false;
+                right.reset();
+                left.reset();
             }
         }
         gpiote.reset_events();
