@@ -13,7 +13,7 @@ use std::fmt;
 pub mod models;
 pub mod schema;
 
-pub use self::models::{Game, GameId, NewGame, NewPlayer, Player, PlayerId, Score};
+pub use self::models::{Game, GameId, NewGame, NewPlayer, Player, PlayerId, Rating, Score};
 
 fn establish_connection() -> Result<Pool<ConnectionManager<PgConnection>>, r2d2::Error> {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -102,6 +102,20 @@ impl GameData {
 
         let player: Player = diesel::insert_into(players::table)
             .values(&new_player)
+            .get_result(&conn)?;
+        Ok(player.id)
+    }
+
+    pub async fn update_player_rating(
+        &self,
+        player_id: PlayerId,
+        r: Rating,
+    ) -> Result<PlayerId, BackendError> {
+        use schema::players::dsl::*;
+        let conn = self.connection.get()?;
+
+        let player: Player = diesel::update(players.filter(id.eq(player_id)))
+            .set(rating.eq(r))
             .get_result(&conn)?;
         Ok(player.id)
     }
