@@ -53,17 +53,40 @@ impl GameData {
         game_id: GameId,
         updated_score_left: Score,
         updated_score_right: Score,
-        updated_status: &str,
+        updated_status: Option<String>,
+    ) -> Result<Game, BackendError> {
+        use schema::games::dsl::*;
+        let conn = self.connection.get()?;
+
+        let game: Game = match updated_status {
+            Some(s) => diesel::update(games.filter(id.eq(game_id)))
+                .set((
+                    score_left.eq(updated_score_left),
+                    score_right.eq(updated_score_right),
+                    status.eq(s),
+                ))
+                .get_result(&conn)?,
+            None => diesel::update(games.filter(id.eq(game_id)))
+                .set((
+                    score_left.eq(updated_score_left),
+                    score_right.eq(updated_score_right),
+                ))
+                .get_result(&conn)?,
+        };
+        Ok(game)
+    }
+
+    pub async fn update_game_players(
+        &self,
+        game_id: GameId,
+        p_left: PlayerId,
+        p_right: PlayerId,
     ) -> Result<Game, BackendError> {
         use schema::games::dsl::*;
         let conn = self.connection.get()?;
 
         let game: Game = diesel::update(games.filter(id.eq(game_id)))
-            .set((
-                score_left.eq(updated_score_left),
-                score_right.eq(updated_score_right),
-                status.eq(updated_status),
-            ))
+            .set((player_left.eq(p_left), player_right.eq(p_right)))
             .get_result(&conn)?;
         Ok(game)
     }

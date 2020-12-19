@@ -4,46 +4,6 @@ use actix_web::{web, App, HttpServer};
 
 use stigadigi_backend::GameData;
 
-/// Notify API that new game should be created and assigned an id.
-/// POST /games
-///   RESPONSE: {"id": 12}
-
-/// Update game state during game
-/// PUT /games/12
-///   BODY: {"id": 12, "state": {"left": 0, "right": 4}}
-///   RESPONSE: {"status": 201}
-
-/// Update game state marking as finished
-/// PUT /games/12
-///   BODY: {"id": 12, "state": {"left": 0, "right": 5, "status": "finished"}}
-///   RESPONSE: {"status": 201}
-
-/// Register a new player
-/// POST /players
-///   BODY: {"name": "Hockeyhurricane"}
-///   RESPONSE: {"status": 201, player: {"id": 332, "name": "Hockeyhurricane"}}
-
-/// Read specific player
-/// GET /players/332
-///   BODY: {"id": "332"}
-///   RESPONSE: {"id": 332, "name": "Hockeyhurricane", "rating": 1333}
-
-/// Read all players
-/// GET /players
-///   RESPONSE: [{"id": 332, "name": "Hockeyhurricane", "rating": 1333}]
-
-/// Register a completed game, binding the result to the player stats.
-/// PUT /games/12/register
-///   BODY: {"id": 12, left: 332, right: 333}
-
-/// GET /games
-///   RESPONSE: [{"12", "left": 332, "right": 333, state: {"left": 0, "right": 5, "status": "finished"}}]
-///
-///
-
-///   
-///   "
-
 mod api {
     //  use actix_web::dev::HttpResponseBuilder;
     //  use actix_web::http::StatusCode;
@@ -52,6 +12,9 @@ mod api {
     use serde::{Deserialize, Serialize};
     use stigadigi_backend::{Game, GameData, GameId, Player, PlayerId, Score};
 
+    /// Notify API that new game should be created and assigned an id.
+    /// POST /games
+    ///   RESPONSE: {"id": 12}
     #[derive(Serialize, Deserialize)]
     struct NewGameResponse {
         id: GameId,
@@ -68,6 +31,11 @@ mod api {
             Err(e) => Ok(HttpResponse::InternalServerError().json(e.to_string())),
         }
     }
+
+    /// Register a new player
+    /// POST /players
+    ///   BODY: {"name": "Hockeyhurricane"}
+    ///   RESPONSE: {"status": 201, player: {"id": 332, "name": "Hockeyhurricane"}}
 
     #[derive(Serialize, Deserialize)]
     struct NewPlayerRequest {
@@ -91,6 +59,10 @@ mod api {
         }
     }
 
+    /// Read all players
+    /// GET /players
+    ///   RESPONSE: [{"id": 332, "name": "Hockeyhurricane", "rating": 1333}]
+
     #[derive(Serialize, Deserialize)]
     struct ListPlayersResponse {
         players: Vec<Player>,
@@ -105,6 +77,10 @@ mod api {
         }
     }
 
+    /// GET /games
+    ///   RESPONSE: [{"12", "left": 332, "right": 333, state: {"left": 0, "right": 5, "status": "finished"}}]
+    ///
+    ///
     #[derive(Serialize, Deserialize)]
     struct ListGamesResponse {
         games: Vec<Game>,
@@ -119,6 +95,15 @@ mod api {
         }
     }
 
+    /// Update game state during game
+    /// PUT /games/12
+    ///   BODY: {"id": 12, "state": {"left": 0, "right": 4}}
+    ///   RESPONSE: {"status": 201}
+    ///
+    /// Update game state marking as finished
+    /// PUT /games/12
+    ///   BODY: {"id": 12, "state": {"left": 0, "right": 5, "status": "finished"}}
+    ///   RESPONSE: {"status": 201}
     #[derive(Serialize, Deserialize)]
     struct UpdateGameResponse {
         id: GameId,
@@ -128,7 +113,7 @@ mod api {
     struct UpdateGameRequest {
         score_left: Score,
         score_right: Score,
-        status: String,
+        status: Option<String>,
     }
 
     #[put("/api/v1/games/{game_id}")]
@@ -138,7 +123,36 @@ mod api {
         data: web::Data<GameData>,
     ) -> Result<HttpResponse, actix_web::Error> {
         let result = data
-            .update_game_status(game_id, game.score_left, game.score_right, &game.status)
+            .update_game_status(
+                game_id,
+                game.score_left,
+                game.score_right,
+                game.status.clone(),
+            )
+            .await;
+        match result {
+            Ok(_) => Ok(HttpResponse::Ok().json(UpdateGameResponse { id: game_id })),
+            Err(e) => Ok(HttpResponse::InternalServerError().json(e.to_string())),
+        }
+    }
+
+    /// Register a game, binding the result to the player stats.
+    /// PUT /games/12/register
+    ///   BODY: {"id": 12, left: 332, right: 333}
+    #[derive(Serialize, Deserialize)]
+    struct RegisterGameRequest {
+        player_left: PlayerId,
+        player_right: PlayerId,
+    }
+
+    #[put("/api/v1/games/{game_id}/register")]
+    async fn register_game(
+        web::Path(game_id): web::Path<GameId>,
+        game: web::Json<RegisterGameRequest>,
+        data: web::Data<GameData>,
+    ) -> Result<HttpResponse, actix_web::Error> {
+        let result = data
+            .update_game_players(game_id, game.player_left, game.player_right)
             .await;
         match result {
             Ok(_) => Ok(HttpResponse::Ok().json(UpdateGameResponse { id: game_id })),
