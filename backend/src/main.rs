@@ -130,6 +130,8 @@ mod api {
                 game.status.clone(),
             )
             .await;
+
+        // TODO: Update player rating if game is completed and players are registered
         match result {
             Ok(_) => Ok(HttpResponse::Ok().json(UpdateGameResponse { id: game_id })),
             Err(e) => Ok(HttpResponse::InternalServerError().json(e.to_string())),
@@ -154,6 +156,8 @@ mod api {
         let result = data
             .update_game_players(game_id, game.player_left, game.player_right)
             .await;
+
+        // TODO: Update player rating if game is completed
         match result {
             Ok(_) => Ok(HttpResponse::Ok().json(UpdateGameResponse { id: game_id })),
             Err(e) => Ok(HttpResponse::InternalServerError().json(e.to_string())),
