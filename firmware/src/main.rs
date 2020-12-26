@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use nrf51_hal as hal;
+use nrf52833_hal as hal;
 use panic_halt as _;
 
 extern crate cortex_m;
@@ -24,14 +24,14 @@ const COOLDOWN: u32 = 10_000_000u32;
 
 pub struct Goal {
     input: Pin<Input<PullUp>>,
-    led: Pin<Output<PushPull>>,
+    //led: Pin<Output<PushPull>>,
     active: u32,
 }
 
 impl Goal {
     fn reset(&mut self) {
         self.active = 0;
-        self.led.set_high().unwrap();
+        //  self.led.set_high().unwrap();
     }
 
     fn is_active(&mut self) -> bool {
@@ -61,14 +61,13 @@ const APP: () = {
         }
         log::set_max_level(log::LevelFilter::Trace);
 
-        let gpio = hal::gpio::p0::Parts::new(ctx.device.GPIO);
+        let gpio = hal::gpio::p0::Parts::new(ctx.device.P0);
 
-        let start_btn = gpio.p0_17.into_pullup_input().degrade();
+        let start_btn = gpio.p0_14.into_pullup_input().degrade();
+        let undo_btn = gpio.p0_23.into_pullup_input().degrade();
 
-        let input_left = gpio.p0_01.into_pullup_input().degrade();
-        let input_right = gpio.p0_07.into_pullup_input().degrade();
-
-        //    let _clocks = Clocks::new(p.CLOCK).enable_ext_hfosc();
+        let input_left = gpio.p0_03.into_pullup_input().degrade();
+        let input_right = gpio.p0_02.into_pullup_input().degrade();
 
         let gpiote = Gpiote::new(ctx.device.GPIOTE);
         gpiote
@@ -89,13 +88,13 @@ const APP: () = {
 
         let left = Goal {
             input: input_left,
-            led: gpio.p0_21.into_push_pull_output(Level::High).degrade(),
+            //led: gpio.p0_21.into_push_pull_output(Level::High).degrade(),
             active: 0,
         };
 
         let right = Goal {
             input: input_right,
-            led: gpio.p0_24.into_push_pull_output(Level::High).degrade(),
+            //led: gpio.p0_24.into_push_pull_output(Level::High).degrade(),
             active: 0,
         };
 
@@ -137,12 +136,12 @@ const APP: () = {
         if timer.is_pending() && *started {
             if left.active > 0 && nownow - left.active > COOLDOWN && !left.is_active() {
                 log::trace!("RESETTING LEFT COOLDOWN");
-                left.led.set_high().unwrap();
+                //left.led.set_high().unwrap();
                 left.active = 0;
             }
             if right.active > 0 && nownow - right.active > COOLDOWN && !right.is_active() {
                 log::trace!("RESETTING RIGHT COOLDOWN");
-                right.led.set_high().unwrap();
+                //  right.led.set_high().unwrap();
                 right.active = 0;
             }
         }
@@ -162,16 +161,16 @@ const APP: () = {
 
         if gpiote.channel0().is_event_triggered() {
             log::trace!("INTERRUPT LEFT: {}", left.is_active());
-            if *started && left.active == 0 && left.is_active() {
+            if *started && left.active == 0 {
                 log::info!("GOAL PLAYER LEFT!!");
-                left.led.set_low().unwrap();
+                //  left.led.set_low().unwrap();
                 left.active = timer.now();
             }
         } else if gpiote.channel1().is_event_triggered() {
             log::trace!("INTERRUPT RIGHT: {}", right.is_active());
-            if *started && right.active == 0 && right.is_active() {
+            if *started && right.active == 0 {
                 log::info!("GOAL PLAYER RIGHT!!");
-                right.led.set_low().unwrap();
+                //right.led.set_low().unwrap();
                 right.active = timer.now();
             }
         } else if gpiote.channel2().is_event_triggered() {
