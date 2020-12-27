@@ -25,7 +25,7 @@ mod matrix;
 use crate::matrix::*;
 
 static LOGGER: RTTLogger = RTTLogger::new(LevelFilter::Trace);
-const COOLDOWN: u32 = 4;
+const COOLDOWN: u32 = 240;
 
 pub struct Goal {
     input: Pin<Input<PullUp>>,
@@ -124,9 +124,9 @@ const APP: () = {
             active: 0,
         };
 
-        let mut rtc = Rtc::new(ctx.device.RTC0, 4095).unwrap();
+        let mut rtc = Rtc::new(ctx.device.RTC0, 68).unwrap();
         rtc.enable_event(RtcInterrupt::Compare0);
-        let _ = rtc.set_compare(RtcCompareReg::Compare0, 10);
+        let _ = rtc.set_compare(RtcCompareReg::Compare0, 2);
 
         let game = Game::new();
 
@@ -183,6 +183,7 @@ const APP: () = {
                 right.active = 0;
             }
         }
+        led.process();
         rtc.reset_event(RtcInterrupt::Compare0);
         rtc.clear_counter();
     }
