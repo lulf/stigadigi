@@ -1,0 +1,28 @@
+[package]
+name = "stigadigi-firmware"
+version = "0.1.0"
+authors = ["Ulf Lilleengen <ulf.lilleengen@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+cortex-m = "0.6.4"
+cortex-m-rt = { version = "0.6.11", features = ["device"] }
+cortex-m-rtic = "0.5.5"
+rtt-target = {version = "0.2.0", features = ["cortex-m"] }
+panic-halt = "0.2.0"
+nrf52833-hal = { version = "0.12.0", features = ["rt"] }
+log = "0.4.11"
+rtt-logger = "0.1.0"
+embedded-hal = { version = "0.2.3", features = ["unproven"] }
+void = { version = "1.0.2", default-features = false }
+
+[profile.release]
+codegen-units = 1 # better optimizations
+debug = true # symbols are nice and they don't increase the size on Flash
+lto = true # better optimizations
+
+[[bin]]
+name = "stigadigi-firmware"
+test = false
+bench = false
+
