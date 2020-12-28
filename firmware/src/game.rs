@@ -12,7 +12,7 @@ pub enum Side {
 
 const LEFT_IDX: usize = 0;
 const RIGHT_IDX: usize = 1;
-const MAX_SCORE: u32 = 9;
+const MAX_SCORE: u32 = 10;
 
 impl Game {
     pub fn new() -> Game {
