@@ -9,6 +9,7 @@ extern crate cortex_m;
 use embedded_hal::digital::v2::InputPin;
 use embedded_hal::digital::v2::OutputPin;
 
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use hal::gpio::{Input, Level, Output, Pin, PullUp, PushPull};
 use hal::gpiote::*;
 use hal::rtc::{Rtc, RtcCompareReg, RtcInterrupt};
@@ -25,20 +26,22 @@ mod matrix;
 use crate::matrix::*;
 
 static LOGGER: RTTLogger = RTTLogger::new(LevelFilter::Trace);
-const COOLDOWN: u32 = 240;
+const COOLDOWN: u32 = 500;
 
 pub struct Goal {
     input: Pin<Input<PullUp>>,
-    active: u32,
+    active: bool,
+    last_goal: u32,
 }
 
 impl Goal {
     fn reset(&mut self) {
-        self.active = 0;
+        self.active = false;
+        self.last_goal = 0;
     }
 
     fn is_active(&mut self) -> bool {
-        self.input.is_low().unwrap()
+        self.input.is_high().unwrap()
     }
 }
 
@@ -51,10 +54,10 @@ const APP: () = {
         game: Game,
         led: LedMatrix,
         rtc: Rtc<hal::pac::RTC0>,
-        #[init(1)]
-        now: u32,
-        #[init(false)]
-        started: bool,
+        #[init(AtomicU32::new(0))]
+        ticks: AtomicU32,
+        #[init(AtomicBool::new(false))]
+        started: AtomicBool,
     }
 
     #[init]
@@ -116,12 +119,14 @@ const APP: () = {
 
         let left = Goal {
             input: input_left,
-            active: 0,
+            active: false,
+            last_goal: 0,
         };
 
         let right = Goal {
             input: input_right,
-            active: 0,
+            active: false,
+            last_goal: 0,
         };
 
         let mut rtc = Rtc::new(ctx.device.RTC0, 68).unwrap();
@@ -149,22 +154,21 @@ const APP: () = {
         }
     }
 
-    #[task(binds = RTC0, resources = [rtc, left, right, now, started, game, led])]
+    #[task(binds = RTC0, resources = [rtc, ticks, started, game, left, right, led])]
     fn on_rtc(ctx: on_rtc::Context) {
         let on_rtc::Resources {
             rtc,
-            left,
-            right,
-            now,
+            ticks,
             started,
             game,
+            left,
+            right,
             led,
         } = ctx.resources;
 
-        *now += 1;
-        let nownow = *now;
+        let now = ticks.fetch_add(1, Ordering::SeqCst);
 
-        if *started {
+        if started.load(Ordering::SeqCst) {
             led.clear();
             for i in 0..game.score(Side::Left) {
                 led.on(i as usize % 5, (i as usize / 5) % 5);
@@ -173,22 +177,14 @@ const APP: () = {
             for i in 0..game.score(Side::Right) {
                 led.on(i as usize % 5, 4 - ((i as usize / 5) % 5));
             }
-
-            if left.active > 0 && nownow - left.active > COOLDOWN && !left.is_active() {
-                log::trace!("RESETTING LEFT COOLDOWN");
-                left.active = 0;
-            }
-            if right.active > 0 && nownow - right.active > COOLDOWN && !right.is_active() {
-                log::trace!("RESETTING RIGHT COOLDOWN");
-                right.active = 0;
-            }
+            check_game(game, left, right, now);
         }
         led.process();
         rtc.reset_event(RtcInterrupt::Compare0);
         rtc.clear_counter();
     }
 
-    #[task(binds = GPIOTE, resources = [gpiote, left, right, rtc, started, game, now, led])]
+    #[task(binds = GPIOTE, resources = [gpiote, left, right, rtc, started, game, ticks, led])]
     fn on_detected(ctx: on_detected::Context) {
         let on_detected::Resources {
             gpiote,
@@ -196,32 +192,18 @@ const APP: () = {
             right,
             started,
             game,
-            now,
+            ticks,
             rtc,
             led,
         } = ctx.resources;
 
-        if gpiote.channel0().is_event_triggered() {
-            log::trace!("INTERRUPT LEFT: {}", left.is_active());
-            if *started && left.active == 0 && left.is_active() {
-                log::info!("GOAL PLAYER LEFT!!");
-                game.goal(Side::Right);
-                game.print();
-                left.active = *now;
-            }
-        } else if gpiote.channel1().is_event_triggered() {
-            log::trace!("INTERRUPT RIGHT: {}", right.is_active());
-            if *started && right.active == 0 && right.is_active() {
-                log::info!("GOAL PLAYER RIGHT!!");
-                game.goal(Side::Left);
-                game.print();
-                right.active = *now;
-            }
+        if gpiote.channel0().is_event_triggered() || gpiote.channel1().is_event_triggered() {
+            check_game(game, left, right, ticks.load(Ordering::SeqCst));
         } else if gpiote.channel2().is_event_triggered() {
-            if !*started {
+            if !started.load(Ordering::SeqCst) {
                 log::info!("Starting game!");
                 // TODO: Call game API
-                *started = true;
+                started.store(true, Ordering::SeqCst);
                 rtc.enable_interrupt(RtcInterrupt::Compare0, None);
                 rtc.reset_event(RtcInterrupt::Compare0);
                 rtc.clear_counter();
@@ -229,8 +211,8 @@ const APP: () = {
             } else {
                 log::info!("Stopping game!");
                 // TODO: Call game API
-                *started = false;
-                *now = 1;
+                started.store(false, Ordering::SeqCst);
+                ticks.store(0, Ordering::SeqCst);
                 game.reset();
                 right.reset();
                 led.clear();
@@ -239,7 +221,7 @@ const APP: () = {
                 rtc.disable_interrupt(RtcInterrupt::Compare0, None);
             }
         } else if gpiote.channel3().is_event_triggered() {
-            if *started {
+            if started.load(Ordering::SeqCst) {
                 log::info!("Calling undo!");
                 game.undo();
                 game.print();
@@ -247,4 +229,36 @@ const APP: () = {
         }
         gpiote.reset_events();
     }
+
+    extern "C" {
+        fn WDT();
+    }
 };
+
+fn check_game(game: &mut Game, left: &mut Goal, right: &mut Goal, now: u32) {
+    if now - left.last_goal > COOLDOWN {
+        if left.is_active() && !left.active {
+            log::info!("GOAL PLAYER LEFT!!");
+            game.goal(Side::Right);
+            game.print();
+            left.active = true;
+        } else if !left.is_active() && left.active {
+            log::info!("Left: Starting cooldown period");
+            left.last_goal = now;
+            left.active = false;
+        }
+    }
+
+    if now - right.last_goal > COOLDOWN {
+        if right.is_active() && !right.active {
+            log::info!("GOAL PLAYER RIGHT!!");
+            game.goal(Side::Left);
+            game.print();
+            right.active = true;
+        } else if !right.is_active() && right.active {
+            log::info!("Right: Starting cooldown period");
+            right.last_goal = now;
+            right.active = false;
+        }
+    }
+}
