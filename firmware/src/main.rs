@@ -129,6 +129,8 @@ const APP: () = {
             last_goal: 0,
         };
 
+        let clocks = hal::clocks::Clocks::new(ctx.device.CLOCK).enable_ext_hfosc();
+        let _clocks = clocks.start_lfclk();
         let mut rtc = Rtc::new(ctx.device.RTC0, 68).unwrap();
         rtc.enable_event(RtcInterrupt::Compare0);
         let _ = rtc.set_compare(RtcCompareReg::Compare0, 2);
