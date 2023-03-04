@@ -1,5 +1,3 @@
-use log;
-
 pub struct Game {
     log: Log,
     score: [u32; 2],
@@ -70,7 +68,7 @@ impl Game {
     }
 
     pub fn print(&self) {
-        log::info!(
+        defmt::info!(
             "Game status: {} - {}",
             self.score[LEFT_IDX],
             self.score[RIGHT_IDX]
