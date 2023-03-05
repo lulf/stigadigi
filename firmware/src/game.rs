@@ -1,6 +1,10 @@
+use embassy_nrf::peripherals::PWM0;
+use microbit_bsp::{mic::Microphone, speaker::PwmSpeaker};
+
 pub struct Game {
     log: Log,
     score: [u32; 2],
+    speaker: PwmSpeaker<'static, PWM0>,
 }
 
 #[derive(defmt::Format, Copy, Clone)]
@@ -23,14 +27,15 @@ const RIGHT_IDX: usize = 1;
 const MAX_SCORE: u32 = 10;
 
 impl Game {
-    pub fn new() -> Game {
+    pub fn new(speaker: PwmSpeaker<'static, PWM0>) -> Game {
         Game {
             log: Log::new(),
             score: [0; 2],
+            speaker,
         }
     }
 
-    pub fn goal(&mut self, side: Side) {
+    pub async fn goal(&mut self, side: Side) {
         let idx = match side {
             Side::Left => LEFT_IDX,
             Side::Right => RIGHT_IDX,

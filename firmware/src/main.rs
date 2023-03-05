@@ -52,10 +52,10 @@ impl Goal {
         defmt::info!("[{}] event: {}", self.side, self.input.is_high());
     }
 
-    fn check(&mut self, game: &mut Game, now: Instant) {
+    async fn check(&mut self, game: &mut Game, now: Instant) {
         if self.last_goal + COOLDOWN < now {
             defmt::info!("[{}] GOAL!!", self.side.goal());
-            game.goal(self.side.goal());
+            game.goal(self.side.goal()).await;
             game.print();
             self.last_goal = now;
         }
