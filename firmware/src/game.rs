@@ -3,9 +3,19 @@ pub struct Game {
     score: [u32; 2],
 }
 
+#[derive(defmt::Format, Copy, Clone)]
 pub enum Side {
     Left,
     Right,
+}
+
+impl Side {
+    pub fn goal(&self) -> Self {
+        match self {
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+        }
+    }
 }
 
 const LEFT_IDX: usize = 0;

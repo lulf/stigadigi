@@ -10,7 +10,7 @@ use {
     embassy_nrf::gpio::{AnyPin, Input, Pin, Pull},
     embassy_time::{Duration, Instant, Ticker},
     futures::StreamExt,
-    microbit_bsp::*,
+    microbit_bsp::{display::*, *},
 };
 
 #[cfg(feature = "panic-probe")]
@@ -26,46 +26,38 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 mod game;
 use crate::game::*;
 
-const COOLDOWN: Duration = Duration::from_millis(500);
+const COOLDOWN: Duration = Duration::from_secs(5);
 
 pub struct Goal {
-    id: &'static str,
+    side: Side,
     input: Input<'static, AnyPin>,
-    active: bool,
     last_goal: Instant,
 }
 
 impl Goal {
-    fn new(id: &'static str, input: Input<'static, AnyPin>) -> Self {
+    fn new(side: Side, input: Input<'static, AnyPin>) -> Self {
         Self {
-            id,
+            side,
             input,
-            active: false,
-            last_goal: Instant::now(),
+            last_goal: Instant::MIN,
         }
     }
 
     fn reset(&mut self) {
-        self.active = false;
-        self.last_goal = Instant::now();
+        self.last_goal = Instant::MIN;
     }
 
     async fn wait(&mut self) {
-        self.input.wait_for_any_edge().await;
+        self.input.wait_for_rising_edge().await;
+        defmt::info!("[{}] event: {}", self.side, self.input.is_high());
     }
 
     fn check(&mut self, game: &mut Game, now: Instant) {
-        if now - COOLDOWN > self.last_goal {
-            if self.input.is_high() && !self.active {
-                defmt::info!("[{}] GOAL!!", self.id);
-                game.goal(Side::Right);
-                game.print();
-                self.active = true;
-            } else if !self.input.is_high() && self.active {
-                defmt::info!("[{}] Starting cooldown period", self.id);
-                self.last_goal = now;
-                self.active = false;
-            }
+        if self.last_goal + COOLDOWN < now {
+            defmt::info!("[{}] GOAL!!", self.side.goal());
+            game.goal(self.side.goal());
+            game.print();
+            self.last_goal = now;
         }
     }
 }
@@ -81,18 +73,22 @@ async fn main(_s: Spawner) {
     let input_left = Input::new(board.p1.degrade(), Pull::Up);
     let input_right = Input::new(board.p2.degrade(), Pull::Up);
 
-    let mut left = Goal::new("left", input_left);
-    let mut right = Goal::new("right", input_right);
+    let mut left = Goal::new(Side::Left, input_left);
+    let mut right = Goal::new(Side::Right, input_right);
 
     let mut display = board.display;
-    let mut render = Ticker::every(Duration::from_millis(100));
+    display.set_brightness(Brightness::MAX);
+    let mut render = Ticker::every(Duration::from_micros(100));
     let mut game = Game::new();
 
     loop {
         match select4(
             left.wait(),
             right.wait(),
-            select(start_btn.wait_for_any_edge(), undo_btn.wait_for_any_edge()),
+            select(
+                start_btn.wait_for_falling_edge(),
+                undo_btn.wait_for_falling_edge(),
+            ),
             render.next(),
         )
         .await
@@ -105,12 +101,14 @@ async fn main(_s: Spawner) {
             }
             Either4::Third(res) => match res {
                 Either::First(_) => {
+                    defmt::info!("Game reset!");
                     game.reset();
                     left.reset();
                     right.reset();
                     display.clear();
                 }
                 Either::Second(_) => {
+                    defmt::info!("Game undo!");
                     game.undo();
                     game.print();
                 }
@@ -118,11 +116,11 @@ async fn main(_s: Spawner) {
             Either4::Fourth(_) => {
                 display.clear();
                 for i in 0..game.score(Side::Left) {
-                    display.on(i as usize % 5, (i as usize / 5) % 5);
+                    display.on((i as usize / 5) % 5, i as usize % 5);
                 }
 
                 for i in 0..game.score(Side::Right) {
-                    display.on(i as usize % 5, 4 - ((i as usize / 5) % 5));
+                    display.on(4 - ((i as usize / 5) % 5), i as usize % 5);
                 }
                 display.render();
             }
