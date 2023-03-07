@@ -3,7 +3,7 @@ build-std = ["core"]
 build-std-features = ["panic_immediate_abort"]
 
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "probe-run --chip nrf52833_xxAA"
+runner = "probe-run --chip RP2040"
 
 rustflags = [
   # Code-size optimizations.
@@ -14,4 +14,4 @@ rustflags = [
 ]
 
 [build]
-target = "thumbv7em-none-eabihf"
+target = "thumbv6m-none-eabi"

@@ -4,13 +4,21 @@
 #![feature(async_fn_in_trait)]
 #![allow(incomplete_features)]
 
+use embedded_graphics::{
+    image::{Image, ImageRaw},
+    pixelcolor::BinaryColor,
+    prelude::*,
+};
+use ssd1306::{prelude::*, I2CDisplayInterface, Ssd1306};
 use {
     embassy_executor::Spawner,
     embassy_futures::select::{select, select4, Either, Either4},
-    embassy_nrf::gpio::{AnyPin, Input, Pin, Pull},
+    embassy_rp::{
+        gpio::{AnyPin, Input, Pin, Pull},
+        i2c,
+    },
     embassy_time::{Duration, Instant, Ticker},
     futures::StreamExt,
-    microbit_bsp::{display::*, *},
 };
 
 #[cfg(feature = "panic-probe")]
@@ -64,32 +72,45 @@ impl Goal {
 
 #[embassy_executor::main]
 async fn main(_s: Spawner) {
-    let board = Microbit::default();
+    let p = embassy_rp::init(Default::default());
+
     defmt::info!("Version: {}", VERSION);
 
-    let mut start_btn = board.btn_a;
-    let mut undo_btn = board.btn_b;
+    let sda = p.PIN_14;
+    let scl = p.PIN_15;
 
-    let input_left = Input::new(board.p1.degrade(), Pull::Up);
-    let input_right = Input::new(board.p2.degrade(), Pull::Up);
+    let mut i2c = i2c::I2c::new_blocking(p.I2C1, scl, sda, i2c::Config::default());
+
+    let interface = I2CDisplayInterface::new(i2c);
+    let mut display = Ssd1306::new(interface, DisplaySize128x64, DisplayRotation::Rotate0)
+        .into_buffered_graphics_mode();
+    display.init().unwrap();
+
+    let raw: ImageRaw<BinaryColor> = ImageRaw::new(include_bytes!("./rust.raw"), 64);
+
+    let im = Image::new(&raw, Point::new(32, 0));
+
+    im.draw(&mut display).unwrap();
+
+    display.flush().unwrap();
+
+    let input_left = Input::new(p.PIN_4.degrade(), Pull::Up);
+    let input_right = Input::new(p.PIN_5.degrade(), Pull::Up);
 
     let mut left = Goal::new(Side::Left, input_left);
     let mut right = Goal::new(Side::Right, input_right);
 
-    let mut display = board.display;
-    display.set_brightness(Brightness::MAX);
-    let mut render = Ticker::every(Duration::from_micros(100));
+    let mut start_btn = Input::new(p.PIN_26.degrade(), Pull::Up);
+    let mut undo_btn = Input::new(p.PIN_27.degrade(), Pull::Up);
+
     let mut game = Game::new();
 
     loop {
         match select4(
             left.wait(),
             right.wait(),
-            select(
-                start_btn.wait_for_falling_edge(),
-                undo_btn.wait_for_falling_edge(),
-            ),
-            render.next(),
+            start_btn.wait_for_falling_edge(),
+            undo_btn.wait_for_falling_edge(),
         )
         .await
         {
@@ -99,30 +120,16 @@ async fn main(_s: Spawner) {
             Either4::Second(_) => {
                 right.check(&mut game, Instant::now());
             }
-            Either4::Third(res) => match res {
-                Either::First(_) => {
-                    defmt::info!("Game reset!");
-                    game.reset();
-                    left.reset();
-                    right.reset();
-                    display.clear();
-                }
-                Either::Second(_) => {
-                    defmt::info!("Game undo!");
-                    game.undo();
-                    game.print();
-                }
-            },
+            Either4::Third(res) => {
+                defmt::info!("Game reset!");
+                game.reset();
+                left.reset();
+                right.reset();
+            }
             Either4::Fourth(_) => {
-                display.clear();
-                for i in 0..game.score(Side::Left) {
-                    display.on((i as usize / 5) % 5, i as usize % 5);
-                }
-
-                for i in 0..game.score(Side::Right) {
-                    display.on(4 - ((i as usize / 5) % 5), i as usize % 5);
-                }
-                display.render();
+                defmt::info!("Game undo!");
+                game.undo();
+                game.print();
             }
         }
     }

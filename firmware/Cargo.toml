@@ -12,12 +12,13 @@ defmt-rtt = "0.4"
 
 static_cell = "1"
 
-microbit-bsp = "0.1.0"
+ssd1306 = "0.7.1"
+embedded-graphics = "0.7.1"
 
 embassy-executor = { version = "0.1.0", default-features = false, features = ["integrated-timers", "nightly"] }
 embassy-time = { version = "0.1.0", default-features = false }
 embassy-sync = { version = "0.1.0", default-features = false }
-embassy-nrf = { version = "0.1.0", default-features = false, features = ["nrf52833"] }
+embassy-rp = { version = "0.1.0", default-features = false, features = ["unstable-traits", "nightly"] }
 embassy-futures = { version = "0.1.0", default-features = false }
 
 cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
@@ -69,9 +70,8 @@ overflow-checks = false
 
 [patch.crates-io]
 embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "e3f8020c3bdf726dfa451b5b190f27191507a18f" }
-embassy-nrf = { git = "https://github.com/embassy-rs/embassy.git", rev = "e3f8020c3bdf726dfa451b5b190f27191507a18f" }
+embassy-rp = { git = "https://github.com/embassy-rs/embassy.git", rev = "e3f8020c3bdf726dfa451b5b190f27191507a18f" }
 embassy-embedded-hal = { git = "https://github.com/embassy-rs/embassy.git", rev = "e3f8020c3bdf726dfa451b5b190f27191507a18f" }
 embassy-hal-common = { git = "https://github.com/embassy-rs/embassy.git", rev = "e3f8020c3bdf726dfa451b5b190f27191507a18f" }
 embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "e3f8020c3bdf726dfa451b5b190f27191507a18f" }
 embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "e3f8020c3bdf726dfa451b5b190f27191507a18f" }
-microbit-bsp = { git = "https://github.com/drogue-iot/drogue-device.git", rev = "98278509c75c59d2049136bdbe45a1b022bf3c68" }
